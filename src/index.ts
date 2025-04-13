@@ -27,7 +27,8 @@ const DEFAULT_API_BASE_PATH = "/api/v1";
 
 interface Config {
   clientId?: string;
-  serverUrl: string;
+  publicServerUrl: string; // Public IP or DNS for registration
+  tunnelServerUrl: string; // Internal WireGuard IP for API after tunnel is up
   apiBasePath: string;
   tunnels: Record<string, any>;
 }
@@ -40,7 +41,8 @@ function initConfig(): Config {
 
   if (!fs.existsSync(CONFIG_FILE)) {
     const defaultConfig: Config = {
-      serverUrl: DEFAULT_SERVER_URL,
+      publicServerUrl: DEFAULT_SERVER_URL,
+      tunnelServerUrl: "http://10.8.0.1:3000",
       apiBasePath: DEFAULT_API_BASE_PATH,
       tunnels: {},
     };
@@ -75,13 +77,13 @@ async function ensureRegistered(config: Config): Promise<Config> {
       type: "input",
       name: "serverUrl",
       message: "Enter server URL (including port):",
-      default: config.serverUrl,
+      default: config.publicServerUrl,
     });
 
-    config.serverUrl = serverUrl;
+    config.publicServerUrl = serverUrl;
 
     const response = await axios.post(
-      `${config.serverUrl}${config.apiBasePath}/register`,
+      `${config.publicServerUrl}${config.apiBasePath}/register`,
       {
         name: os.hostname(),
       }
@@ -168,8 +170,9 @@ async function createTunnel(
   subdomain?: string
 ) {
   try {
+    // Use tunnelServerUrl for API calls after tunnel is up
     const response = await axios.post(
-      `${config.serverUrl}${config.apiBasePath}/tunnels`,
+      `${config.tunnelServerUrl}${config.apiBasePath}/tunnels`,
       {
         clientId: config.clientId,
         localPort,
@@ -198,7 +201,7 @@ async function createTunnel(
 async function deleteTunnel(config: Config, tunnelId: string) {
   try {
     await axios.delete(
-      `${config.serverUrl}${config.apiBasePath}/tunnels/${tunnelId}`
+      `${config.tunnelServerUrl}${config.apiBasePath}/tunnels/${tunnelId}`
     );
 
     // Remove tunnel from config
@@ -237,7 +240,7 @@ program
 
     // Update server URL if provided
     if (options.server) {
-      config.serverUrl = options.server;
+      config.publicServerUrl = options.server;
       saveConfig(config);
     }
 
@@ -246,6 +249,7 @@ program
 
     // Start WireGuard interface
     await startWireGuard();
+    // No need to overwrite config here; tunnelServerUrl is already set
 
     // Create tunnel
     const tunnel = await createTunnel(config, port, options.subdomain);
@@ -316,13 +320,14 @@ program
     let config = initConfig();
 
     if (options.server) {
-      config.serverUrl = options.server;
+      config.publicServerUrl = options.server;
       saveConfig(config);
       console.log(chalk.green(`Server URL set to: ${options.server}`));
     } else {
       // Display current config
       console.log(chalk.blue("Current configuration:"));
-      console.log(`Server URL: ${config.serverUrl}`);
+      console.log(`Public Server URL: ${config.publicServerUrl}`);
+      console.log(`Tunnel Server URL: ${config.tunnelServerUrl}`);
       console.log(`Client ID: ${config.clientId || "Not registered"}`);
       console.log(`Active tunnels: ${Object.keys(config.tunnels).length}`);
     }
