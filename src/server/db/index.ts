@@ -58,17 +58,24 @@ function initializeDatabase() {
     )
   `);
 
-  // Insert default config values if they don't exist
-  const configResult = db
-    .prepare("SELECT COUNT(*) as count FROM config")
-    .get() as { count: number };
-  const configCount = configResult.count;
-  if (configCount === 0) {
-    const insertConfig = db.prepare(
-      "INSERT INTO config (key, value) VALUES (?, ?)"
-    );
-    insertConfig.run("last_assigned_ip", "10.8.0.1");
-    insertConfig.run("base_domain", "dev.yourdomain.com");
+  // Ensure essential config values exist in the database
+  const getConfig = db.prepare("SELECT value FROM config WHERE key = ?");
+  const setConfig = db.prepare(
+    "INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)"
+  );
+
+  // Define defaults (these should match the conceptual defaults removed from config/index.ts)
+  const defaults = {
+    last_assigned_ip: "10.8.0.1", // Start assigning from .2
+    BASE_DOMAIN: "woof.tunnels.dev", // Example public domain
+    WG_SERVER_IP: "10.8.0.1",
+    WG_CLIENT_IP_RANGE: "10.8.0.2-10.8.0.254",
+    // server_public_key and server_private_key are handled by wireguard service init
+  };
+
+  // Set defaults if keys don't exist
+  for (const [key, value] of Object.entries(defaults)) {
+    setConfig.run(key, value);
   }
 }
 

@@ -2,7 +2,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
-import { NGINX_SITES_PATH, BASE_DOMAIN } from "../config/index.js";
+import { getNginxSitesPath, getBaseDomain } from "../config/index.js";
 
 // Promisify exec and fs functions
 const execAsync = promisify(exec);
@@ -23,7 +23,7 @@ export interface TunnelConfig {
  * Generate an Nginx server block configuration for a tunnel
  */
 export function generateNginxConfig(config: TunnelConfig): string {
-  const serverName = `${config.subdomain}.${BASE_DOMAIN}`;
+  const serverName = `${config.subdomain}.${getBaseDomain()}`;
 
   return `
 # Tunnel: ${config.id} (Client: ${config.clientId})
@@ -42,8 +42,8 @@ server {
   server_name ${serverName};
 
   # SSL configuration
-  ssl_certificate /etc/letsencrypt/live/${BASE_DOMAIN}/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/${BASE_DOMAIN}/privkey.pem;
+  ssl_certificate /etc/letsencrypt/live/${getBaseDomain()}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${getBaseDomain()}/privkey.pem;
   ssl_protocols TLSv1.2 TLSv1.3;
   ssl_prefer_server_ciphers on;
   ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;
@@ -85,7 +85,7 @@ export async function checkNginxAccess(): Promise<boolean> {
     await execAsync("which nginx");
 
     // Check if we have access to the sites directory
-    await accessAsync(NGINX_SITES_PATH, fs.constants.W_OK);
+    await accessAsync(getNginxSitesPath(), fs.constants.W_OK);
 
     return true;
   } catch (error) {
@@ -100,35 +100,35 @@ export async function checkNginxAccess(): Promise<boolean> {
 export async function addTunnelConfig(config: TunnelConfig): Promise<void> {
   try {
     // Diagnostic logging
-    console.log("[DEBUG] NGINX_SITES_PATH:", NGINX_SITES_PATH);
+    console.log("[DEBUG] NGINX_SITES_PATH:", getNginxSitesPath());
 
     // Check if the directory exists
     try {
-      await accessAsync(NGINX_SITES_PATH, fs.constants.F_OK);
-      console.log("[DEBUG] Directory exists:", NGINX_SITES_PATH);
+      await accessAsync(getNginxSitesPath(), fs.constants.F_OK);
+      console.log("[DEBUG] Directory exists:", getNginxSitesPath());
     } catch (dirErr) {
       console.error(
         "[ERROR] NGINX_SITES_PATH does not exist:",
-        NGINX_SITES_PATH,
+        getNginxSitesPath(),
         dirErr
       );
       throw new Error(
-        `[DIAGNOSE] NGINX_SITES_PATH does not exist: ${NGINX_SITES_PATH}`
+        `[DIAGNOSE] NGINX_SITES_PATH does not exist: ${getNginxSitesPath()}`
       );
     }
 
     // Check if the directory is writable
     try {
-      await accessAsync(NGINX_SITES_PATH, fs.constants.W_OK);
-      console.log("[DEBUG] Directory is writable:", NGINX_SITES_PATH);
+      await accessAsync(getNginxSitesPath(), fs.constants.W_OK);
+      console.log("[DEBUG] Directory is writable:", getNginxSitesPath());
     } catch (permErr) {
       console.error(
         "[ERROR] No write permission for NGINX_SITES_PATH:",
-        NGINX_SITES_PATH,
+        getNginxSitesPath(),
         permErr
       );
       throw new Error(
-        `[DIAGNOSE] No write permission for NGINX_SITES_PATH: ${NGINX_SITES_PATH}`
+        `[DIAGNOSE] No write permission for NGINX_SITES_PATH: ${getNginxSitesPath()}`
       );
     }
 
@@ -136,7 +136,10 @@ export async function addTunnelConfig(config: TunnelConfig): Promise<void> {
     const nginxConfig = generateNginxConfig(config);
 
     // Write the configuration to a file
-    const configPath = path.join(NGINX_SITES_PATH, `tunnel-${config.id}.conf`);
+    const configPath = path.join(
+      getNginxSitesPath(),
+      `tunnel-${config.id}.conf`
+    );
     console.log("[DEBUG] Writing config to:", configPath);
     await writeFileAsync(configPath, nginxConfig);
 
@@ -144,7 +147,9 @@ export async function addTunnelConfig(config: TunnelConfig): Promise<void> {
     await reloadNginx();
 
     console.log(
-      `Added Nginx configuration for tunnel: ${config.id} (${config.subdomain}.${BASE_DOMAIN})`
+      `Added Nginx configuration for tunnel: ${config.id} (${
+        config.subdomain
+      }.${getBaseDomain()})`
     );
   } catch (error) {
     console.error("Error adding Nginx configuration:", error);
@@ -158,7 +163,10 @@ export async function addTunnelConfig(config: TunnelConfig): Promise<void> {
 export async function removeTunnelConfig(tunnelId: string): Promise<void> {
   try {
     // Remove the configuration file
-    const configPath = path.join(NGINX_SITES_PATH, `tunnel-${tunnelId}.conf`);
+    const configPath = path.join(
+      getNginxSitesPath(),
+      `tunnel-${tunnelId}.conf`
+    );
 
     // Check if the file exists
     try {

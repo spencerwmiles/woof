@@ -401,12 +401,30 @@ program
   .command("server")
   .description("Server management commands")
   .command("start")
-  .description("Start the Dev Tunnel server")
-  .action(async () => {
+  .description("Start the Woof server")
+  .option("-p, --port <port>", "Port to run the API server on")
+  .option(
+    "-b, --bind <address>",
+    "IP address to bind the API server to (e.g., 0.0.0.0, 127.0.0.1)"
+  )
+  .option(
+    "-d, --base-domain <domain>",
+    "Base domain for public tunnel URLs (e.g., tunnel.yourdomain.com)"
+  )
+  .action(async (options) => {
     try {
+      // Override config from options if provided by setting env vars
+      // Note: This is a simple way; a more robust approach might involve
+      // passing config directly to startServer if it were refactored.
+      if (options.port) process.env.PORT = options.port;
+      if (options.bind) process.env.API_BIND_ADDR = options.bind;
+      if (options.baseDomain) process.env.BASE_DOMAIN = options.baseDomain;
+
+      // Reload config potentially influenced by env vars set above
+      // This assumes startServer internally imports the config again.
       await startServer();
     } catch (error) {
-      console.error("Server failed to start:", error);
+      console.error(chalk.red("Server failed to start:"), error);
       process.exit(1);
     }
   });

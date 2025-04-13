@@ -3,8 +3,9 @@ import cors from "cors";
 import {
   DEFAULT_PORT,
   API_BASE_PATH,
-  WG_INTERFACE,
+  // WG_INTERFACE, // Removed static import
   API_BIND_ADDR,
+  getWgInterface, // Import getter function
 } from "./config/index.js";
 import { db } from "./db/index.js";
 import fs from "fs";
@@ -54,7 +55,7 @@ export async function startServer() {
 
   console.log("Initializing server...");
   console.log(`API base path: ${API_BASE_PATH}`);
-  console.log(`WireGuard interface: ${WG_INTERFACE}`);
+  console.log(`WireGuard interface: ${getWgInterface()}`); // Call getter function
 
   try {
     // Interactive config review and update

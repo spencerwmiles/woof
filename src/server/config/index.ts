@@ -2,14 +2,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 // Server configuration
-// Server configuration Defaults (can be overridden via CLI options for `woof server start`)
+import { configDb } from "../db/index.js"; // Import DB access
+
+// --- Bootstrap Configuration (Needed before DB access) ---
 export const DEFAULT_PORT = 3000;
-export const DEFAULT_WG_SERVER_IP = "10.8.0.1";
-export const DEFAULT_WG_CLIENT_IP_RANGE = "10.8.0.2-10.8.0.254";
-export const DEFAULT_BASE_DOMAIN = "woof.tunnels.dev"; // Example default
-export const DEFAULT_API_BIND_ADDR = "0.0.0.0";
-export const NODE_ENV = process.env.NODE_ENV || "development"; // Keep NODE_ENV for now
-export const IS_PRODUCTION = NODE_ENV === "production";
+export const DEFAULT_API_BIND_ADDR = "0.0.0.0"; // Default bind address
 
 // Database configuration
 // Database configuration (relative path is usually fine)
@@ -18,25 +15,71 @@ export const DB_PATH = path.join(
   "../../data/tunnels.db"
 );
 
-// WireGuard configuration
-export const WG_INTERFACE = "wg0"; // Usually fixed
-// WG_SERVER_IP and WG_CLIENT_IP_RANGE use defaults defined above
-export const WG_SERVER_IP = DEFAULT_WG_SERVER_IP;
-export const WG_CLIENT_IP_RANGE = DEFAULT_WG_CLIENT_IP_RANGE;
+// --- Operational Configuration (Read from Database) ---
 
-// Parse the client IP range
-const [rangeStart, rangeEnd] = WG_CLIENT_IP_RANGE.split("-");
-export const WG_CLIENT_IP_START = rangeStart;
-export const WG_CLIENT_IP_END = rangeEnd;
+// Helper to read from DB, assumes key exists due to initialization
+function getConfigValue(key: string): string {
+  const row = configDb.get.get(key) as { value: string } | undefined;
+  if (!row) {
+    // This should ideally not happen if DB init works
+    throw new Error(`Configuration key "${key}" not found in database.`);
+  }
+  return row.value;
+}
 
-// Nginx configuration
-export const NGINX_SITES_PATH = "/etc/nginx/sites-enabled"; // Common default
-// BASE_DOMAIN uses default defined above
-export const BASE_DOMAIN = DEFAULT_BASE_DOMAIN;
-// API configuration
+export function getWgInterface(): string {
+  // WG_INTERFACE is often static, but could be configurable
+  return getConfigValue("WG_INTERFACE") || "wg0"; // Read or default
+}
+
+export function getWgServerIp(): string {
+  return getConfigValue("WG_SERVER_IP");
+}
+
+export function getWgClientIpRange(): string {
+  return getConfigValue("WG_CLIENT_IP_RANGE");
+}
+
+export function getWgClientIpStartEnd(): { start: string; end: string } {
+  const range = getWgClientIpRange();
+  const [start, end] = range.split("-");
+  if (!start || !end) {
+    throw new Error(`Invalid WG_CLIENT_IP_RANGE format: ${range}`);
+  }
+  return { start, end };
+}
+
+export function getNginxSitesPath(): string {
+  // Could also be stored in DB, or keep as env/default
+  return process.env.NGINX_SITES_PATH || "/etc/nginx/sites-enabled";
+}
+
+export function getBaseDomain(): string {
+  return getConfigValue("BASE_DOMAIN");
+}
+
+// API configuration (can remain static)
 export const API_PREFIX = "/api";
 export const API_VERSION = "v1";
 export const API_BASE_PATH = `${API_PREFIX}/${API_VERSION}`;
 
-// API_BIND_ADDR uses default defined above
+// API bind address uses bootstrap default
 export const API_BIND_ADDR = DEFAULT_API_BIND_ADDR;
+
+// Function to get all operational config needed by services
+// Ensures values are read after DB is initialized
+export function getOperationalConfig() {
+  const { start: wgClientIpStart, end: wgClientIpEnd } =
+    getWgClientIpStartEnd();
+  return {
+    WG_INTERFACE: getWgInterface(),
+    WG_SERVER_IP: getWgServerIp(),
+    WG_CLIENT_IP_RANGE: getWgClientIpRange(),
+    WG_CLIENT_IP_START: wgClientIpStart,
+    WG_CLIENT_IP_END: wgClientIpEnd,
+    NGINX_SITES_PATH: getNginxSitesPath(),
+    BASE_DOMAIN: getBaseDomain(),
+  };
+}
+
+// Removed duplicate export of API_BIND_ADDR

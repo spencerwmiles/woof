@@ -3,7 +3,11 @@ import { promisify } from "util";
 import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
-import { WG_INTERFACE, WG_SERVER_IP, BASE_DOMAIN } from "../config/index.js";
+import {
+  getWgInterface,
+  getWgServerIp,
+  getBaseDomain,
+} from "../config/index.js";
 import { clientsDb, configDb } from "../db/index.js";
 import os from "os";
 
@@ -30,7 +34,7 @@ export interface PeerStatus {
 
 // Server configuration paths
 const WG_CONFIG_DIR = "/etc/wireguard";
-const WG_CONFIG_FILE = path.join(WG_CONFIG_DIR, `${WG_INTERFACE}.conf`);
+const WG_CONFIG_FILE = path.join(WG_CONFIG_DIR, `${getWgInterface()}.conf`);
 
 interface ConfigValue {
   value: string;
@@ -76,7 +80,7 @@ export async function initializeServer(): Promise<void> {
     // Generate WireGuard configuration
     const config = `[Interface]
 PrivateKey = ${serverPrivateKey}
-Address = ${WG_SERVER_IP}/24
+Address = ${getWgServerIp()}/24
 ListenPort = 51820
 SaveConfig = true
 
@@ -93,13 +97,15 @@ PostDown = sysctl -w net.ipv4.ip_forward=0; iptables -D FORWARD -i %i -d 127.0.0
 
     // Bring up the interface
     try {
-      await execAsync(`sudo wg-quick down ${WG_INTERFACE}`);
+      await execAsync(`sudo wg-quick down ${getWgInterface()}`);
     } catch (error) {
       // Ignore errors when bringing down non-existent interface
     }
-    await execAsync(`sudo wg-quick up ${WG_INTERFACE}`);
+    await execAsync(`sudo wg-quick up ${getWgInterface()}`);
 
-    console.log(`WireGuard interface ${WG_INTERFACE} initialized successfully`);
+    console.log(
+      `WireGuard interface ${getWgInterface()} initialized successfully`
+    );
   } catch (error) {
     console.error("Error initializing WireGuard server:", error);
     throw new Error("Failed to initialize WireGuard server");
@@ -142,7 +148,7 @@ export function getNextAvailableIp(): string {
   const lastIpResult = configDb.get.get("last_assigned_ip") as
     | { value: string }
     | undefined;
-  const lastIp = lastIpResult?.value || WG_SERVER_IP;
+  const lastIp = lastIpResult?.value || getWgServerIp();
 
   // Split the IP into parts
   const ipParts = lastIp.split(".");
@@ -177,7 +183,9 @@ export async function addPeer(peer: WireGuardPeer): Promise<void> {
   try {
     // Add the peer to WireGuard
     await execAsync(
-      `sudo wg set ${WG_INTERFACE} peer ${peer.publicKey} allowed-ips ${peer.assignedIp}/32`
+      `sudo wg set ${getWgInterface()} peer ${peer.publicKey} allowed-ips ${
+        peer.assignedIp
+      }/32`
     );
 
     // Save the peer to the database
@@ -211,7 +219,7 @@ export async function removePeer(peerId: string): Promise<void> {
 
     // Remove the peer from WireGuard
     await execAsync(
-      `sudo wg set ${WG_INTERFACE} peer ${peer.publicKey} remove`
+      `sudo wg set ${getWgInterface()} peer ${peer.publicKey} remove`
     );
 
     // Remove the peer from the database
@@ -230,7 +238,7 @@ export async function removePeer(peerId: string): Promise<void> {
 export async function getPeerStatus(): Promise<PeerStatus[]> {
   try {
     // Get the status of all peers
-    const { stdout } = await execAsync(`sudo wg show ${WG_INTERFACE} dump`);
+    const { stdout } = await execAsync(`sudo wg show ${getWgInterface()} dump`);
 
     // Parse the output
     const lines = stdout.trim().split("\n");
@@ -313,38 +321,41 @@ export async function registerClient(name?: string): Promise<WireGuardPeer> {
  * Get the server's public IP or hostname
  */
 export async function getServerEndpoint(): Promise<string> {
-  // Try to get public IP using a service like ipify
-  try {
-    // First check if BASE_DOMAIN is set and not localhost
-    if (BASE_DOMAIN && BASE_DOMAIN !== "localhost") {
-      return `${BASE_DOMAIN}:51820`;
-    }
-
-    // Otherwise, try to get public IP
-    const { stdout } = await execAsync("curl -s https://api.ipify.org");
-    return `${stdout.trim()}:51820`;
-  } catch (error) {
-    console.error("Error getting server endpoint:", error);
-    // Fallback to local IP
-    const networkInterfaces = os.networkInterfaces();
-    const externalInterface = Object.keys(networkInterfaces).find((iface) =>
-      networkInterfaces[iface]?.some(
-        (addr) => addr.family === "IPv4" && !addr.internal
-      )
-    );
-
-    if (externalInterface) {
-      const ipAddress = networkInterfaces[externalInterface]?.find(
-        (addr) => addr.family === "IPv4" && !addr.internal
-      )?.address;
-
-      if (ipAddress) {
-        return `${ipAddress}:51820`;
-      }
-    }
-
-    throw new Error("Failed to determine server endpoint");
+  // 1. Use BASE_DOMAIN if explicitly configured
+  const baseDomain = getBaseDomain(); // Get domain from config DB
+  if (baseDomain) {
+    console.log(`Using configured BASE_DOMAIN for endpoint: ${baseDomain}`);
+    return `${baseDomain}:51820`;
   }
+
+  // 2. Try to get public IP using ipify.org
+  try {
+    console.log("Attempting to determine public IP via ipify.org...");
+    const { stdout } = await execAsync("curl -s https://api.ipify.org");
+    const publicIp = stdout.trim();
+    if (publicIp) {
+      console.log(`Determined public IP: ${publicIp}`);
+      return `${publicIp}:51820`;
+    }
+  } catch (ipifyError) {
+    console.warn("Could not determine public IP via ipify.org:", ipifyError);
+  }
+
+  // 3. Fallback: Use the WireGuard Server IP (might only work locally)
+  // This is less ideal as it might not be reachable externally.
+  // Fallback: Use the WireGuard Server IP (might only work locally)
+  const wgServerIp = getWgServerIp();
+  console.warn(
+    `Could not determine public endpoint. Falling back to WG_SERVER_IP: ${wgServerIp}. This might not be reachable externally.`
+  );
+  if (wgServerIp) {
+    return `${wgServerIp}:51820`;
+  }
+
+  // 4. If all else fails, throw an error
+  throw new Error(
+    "Failed to determine server endpoint. Configure BASE_DOMAIN or ensure public IP is discoverable."
+  );
 }
 
 export default {
