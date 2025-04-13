@@ -39,23 +39,34 @@ function initConfig(): Config {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
   }
 
-  if (!fs.existsSync(CONFIG_FILE)) {
-    const defaultConfig: Config = {
-      publicServerUrl: DEFAULT_SERVER_URL,
-      tunnelServerUrl: "http://10.8.0.1:3000",
-      apiBasePath: DEFAULT_API_BASE_PATH,
-      tunnels: {},
-    };
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(defaultConfig, null, 2));
-    return defaultConfig;
+  let configData: Partial<Config> = {};
+  if (fs.existsSync(CONFIG_FILE)) {
+    try {
+      configData = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+    } catch (error) {
+      console.error("Failed to parse config file, creating a new one:", error);
+      // Proceed to create default below
+    }
   }
 
-  try {
-    return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
-  } catch (error) {
-    console.error("Failed to parse config file:", error);
-    process.exit(1);
+  // Ensure required fields exist, providing placeholders if necessary
+  const finalConfig: Config = {
+    publicServerUrl: configData.publicServerUrl || "", // Placeholder
+    tunnelServerUrl: configData.tunnelServerUrl || "", // Placeholder
+    apiBasePath: configData.apiBasePath || DEFAULT_API_BASE_PATH, // Use default base path
+    clientId: configData.clientId,
+    tunnels: configData.tunnels || {},
+  };
+
+  // Write back the potentially updated config (e.g., if file was missing/corrupt)
+  // This ensures the file always reflects the structure we expect
+  if (!fs.existsSync(CONFIG_FILE) || Object.keys(configData).length === 0) {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(finalConfig, null, 2));
   }
+
+  return finalConfig;
+
+  // Removed old try/catch as it's handled above now
 }
 
 // Save config to file
@@ -72,16 +83,40 @@ async function ensureRegistered(config: Config): Promise<Config> {
   console.log(chalk.blue("Registering with server..."));
 
   try {
-    // Allow user to input server URL if not registered yet
-    const { serverUrl } = await inquirer.prompt({
+    // Prompt for the public server URL (domain or IP, no port needed usually)
+    const { publicUrlInput } = await inquirer.prompt({
       type: "input",
-      name: "serverUrl",
-      message: "Enter server URL (including port):",
-      default: config.publicServerUrl,
+      name: "publicUrlInput",
+      message: "Enter public server domain or IP (e.g., ghost.style):",
+      // Use existing publicServerUrl if available, otherwise prompt without default
+      default: config.publicServerUrl
+        ?.replace(/^https?:\/\//, "")
+        .split(":")[0],
     });
 
-    config.publicServerUrl = serverUrl;
+    // Construct the public URL (assume https unless http:// is specified)
+    const publicUrl = publicUrlInput.startsWith("http://")
+      ? publicUrlInput
+      : `https://${publicUrlInput}`;
+    config.publicServerUrl = publicUrl;
 
+    // Derive the default tunnel server URL (assume same host, default API port 3000)
+    const publicHost = new URL(publicUrl).hostname;
+    const defaultTunnelUrl = `http://${publicHost}:3000`;
+
+    // Prompt for the tunnel server URL, defaulting to the derived one
+    const { tunnelUrlInput } = await inquirer.prompt({
+      type: "input",
+      name: "tunnelUrlInput",
+      message: "Enter internal tunnel API URL (for API calls):",
+      default: config.tunnelServerUrl || defaultTunnelUrl, // Use existing or derived default
+    });
+    config.tunnelServerUrl = tunnelUrlInput;
+
+    console.log(chalk.dim(`Using Public URL: ${config.publicServerUrl}`));
+    console.log(chalk.dim(`Using Tunnel API URL: ${config.tunnelServerUrl}`));
+
+    // Register using the public URL
     const response = await axios.post(
       `${config.publicServerUrl}${config.apiBasePath}/register`,
       {
@@ -99,6 +134,7 @@ async function ensureRegistered(config: Config): Promise<Config> {
     console.log(`Client ID: ${client.id}`);
     console.log(`Assigned IP: ${client.assignedIp}`);
 
+    // Save the updated config (including both URLs)
     saveConfig(config);
 
     return config;

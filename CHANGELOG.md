@@ -1,5 +1,11 @@
 # @spencerwmiles/woof
 
+## 0.0.6
+
+### Patch Changes
+
+- Cleaned up configuration and default values, prep for additional customization
+
 ## 0.0.5
 
 ### Patch Changes

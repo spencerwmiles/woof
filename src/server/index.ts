@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import {
-  PORT,
+  DEFAULT_PORT,
   API_BASE_PATH,
   WG_INTERFACE,
   API_BIND_ADDR,
@@ -95,10 +95,10 @@ export async function startServer() {
     await wireguardService.initializeServer();
 
     // Start the server
-    const server = app.listen(Number(PORT), API_BIND_ADDR, () => {
-      console.log(`Server running on ${API_BIND_ADDR}:${PORT}`);
+    const server = app.listen(Number(DEFAULT_PORT), API_BIND_ADDR, () => {
+      console.log(`Server running on ${API_BIND_ADDR}:${DEFAULT_PORT}`);
       console.log(
-        `API available at http://${API_BIND_ADDR}:${PORT}${API_BASE_PATH}`
+        `API available at http://${API_BIND_ADDR}:${DEFAULT_PORT}${API_BASE_PATH}`
       );
     });
 
