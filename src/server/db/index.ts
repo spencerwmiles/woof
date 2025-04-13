@@ -68,9 +68,12 @@ function initializeDatabase() {
   const defaults = {
     last_assigned_ip: "10.8.0.1", // Start assigning from .2
     BASE_DOMAIN: "woof.tunnels.dev", // Example public domain
+    domain: "woof.tunnels.dev", // Alias for BASE_DOMAIN for legacy/consistency
     WG_SERVER_IP: "10.8.0.1",
     WG_CLIENT_IP_RANGE: "10.8.0.2-10.8.0.254",
-    // server_public_key and server_private_key are handled by wireguard service init
+    WG_INTERFACE: "wg0", // Default WireGuard interface name
+    server_private_key: "", // Placeholder, should be set by WireGuard service
+    server_public_key: "", // Placeholder, should be set by WireGuard service
   };
 
   // Set defaults if keys don't exist

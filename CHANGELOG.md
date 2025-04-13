@@ -1,5 +1,11 @@
 # @spencerwmiles/woof
 
+## 0.0.8
+
+### Patch Changes
+
+- Added all required values to db defaults for config
+
 ## 0.0.6
 
 ### Patch Changes
