@@ -1,7 +1,10 @@
 import express from "express";
 import clientRoutes from "./clients.js";
 import tunnelRoutes from "./tunnels.js";
-import packageJson from "../../../package.json" with { type: "json" };
+import fs from "fs";
+const packageJson = JSON.parse(
+  fs.readFileSync(new URL("../../../package.json", import.meta.url), "utf-8")
+);
 
 // Create router
 const router: express.Router = express.Router();

@@ -2,7 +2,9 @@
 
 import { Command } from "commander";
 import chalk from "chalk";
-import json from "../package.json" with { type: "json" };
+const json = JSON.parse(
+  fs.readFileSync(new URL("../package.json", import.meta.url), "utf-8")
+);
 import fs from "fs";
 import path from "path";
 import axios from "axios";
