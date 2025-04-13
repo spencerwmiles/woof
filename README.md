@@ -97,6 +97,13 @@ woof server start
 
 The CLI will prompt for configuration and start the API server.
 
+**Note on API Accessibility:** By default, the API server listens on `0.0.0.0` (all network interfaces), making it publicly accessible. To restrict access, set the `API_BIND_ADDR` environment variable before starting the server:
+
+- **Restrict to localhost:** `export API_BIND_ADDR=127.0.0.1`
+- **Restrict to WireGuard interface:** `export API_BIND_ADDR=10.8.0.1` (or your server's WireGuard IP)
+
+Then run `woof server start`.
+
 ### Client Usage
 
 Create a tunnel to expose a local port:

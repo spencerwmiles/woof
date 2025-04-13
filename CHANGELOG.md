@@ -1,5 +1,11 @@
 # @spencerwmiles/woof
 
+## 0.0.5
+
+### Patch Changes
+
+- Allow API binding to be exposed to public.
+
 ## 0.0.4
 
 ### Patch Changes

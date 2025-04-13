@@ -40,4 +40,4 @@ export const API_VERSION = "v1";
 export const API_BASE_PATH = `${API_PREFIX}/${API_VERSION}`;
 
 // API bind address (restrict API to WireGuard interface by default)
-export const API_BIND_ADDR = process.env.API_BIND_ADDR || WG_SERVER_IP;
+export const API_BIND_ADDR = process.env.API_BIND_ADDR || "0.0.0.0";
