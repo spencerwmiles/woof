@@ -313,16 +313,44 @@ program
 
 program
   .command("config")
-  .description("Manage configuration")
-  .option("--server <url>", "Set server URL")
+  .description("Manage configuration (public and tunnel server URLs)")
+  .option(
+    "--public-server <url>",
+    "Set the public server URL (for registration)"
+  )
+  .option(
+    "--tunnel-server <url>",
+    "Set the internal tunnel server URL (for API calls)"
+  )
+  .option("--server <url>", "Alias for --public-server") // Backward compatibility
   .action(async (options) => {
     // Initialize config
     let config = initConfig();
+    let updated = false;
 
-    if (options.server) {
-      config.publicServerUrl = options.server;
+    // Handle alias
+    if (options.server && !options.publicServer) {
+      options.publicServer = options.server;
+    }
+
+    if (options.publicServer) {
+      config.publicServerUrl = options.publicServer;
+      console.log(
+        chalk.green(`Public Server URL set to: ${options.publicServer}`)
+      );
+      updated = true;
+    }
+
+    if (options.tunnelServer) {
+      config.tunnelServerUrl = options.tunnelServer;
+      console.log(
+        chalk.green(`Tunnel Server URL set to: ${options.tunnelServer}`)
+      );
+      updated = true;
+    }
+
+    if (updated) {
       saveConfig(config);
-      console.log(chalk.green(`Server URL set to: ${options.server}`));
     } else {
       // Display current config
       console.log(chalk.blue("Current configuration:"));
