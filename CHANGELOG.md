@@ -1,5 +1,11 @@
 # @spencerwmiles/woof
 
+## 0.0.4
+
+### Patch Changes
+
+- 986b092: Aligned configuration options with url updates
+
 ## 0.0.3
 
 ### Patch Changes
