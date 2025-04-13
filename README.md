@@ -28,8 +28,6 @@ A simple CLI which provides both a server and a client for exposing services to 
 
 ## Project Structure
 
-This project is now a single-app, flat structure:
-
 ```
 .
 ├── src/                # All source code (CLI and server)
@@ -43,6 +41,10 @@ This project is now a single-app, flat structure:
 
 ## Requirements
 
+- **WireGuard**: You must have [WireGuard](https://www.wireguard.com/install/) installed on both the server and client machines.  
+  - On Linux: `sudo apt install wireguard` (Debian/Ubuntu) or `sudo yum install wireguard-tools` (CentOS/Fedora)
+  - On macOS: `brew install wireguard-tools`
+  - On Windows: [Download from wireguard.com](https://www.wireguard.com/install/)
 - **Server**: Linux-based system
 - **Client**: macOS, Windows, or Linux machine
 - **Networking**: UDP port 51820 must be open on the server
@@ -50,33 +52,66 @@ This project is now a single-app, flat structure:
 - **Node.js**: v16 or higher
 - **pnpm**: v8 or higher
 
-## Getting Started
+## Setup & Installation
 
-### pnpm Setup
+### 1. Install the CLI
 
-Before installing dependencies, make sure pnpm is properly set up:
+You can install the CLI globally from npm:
 
-1. Install pnpm if you haven't already:
-   ```bash
-   npm install -g pnpm
-   ```
+```bash
+pnpm add -g @spencerwmiles/woof
+# or
+npm install -g @spencerwmiles/woof
+```
 
-2. Run pnpm setup to configure the global bin directory:
-   ```bash
-   pnpm setup
-   ```
+This will make the `woof` command available globally.
 
-3. Add pnpm to your PATH (follow the instructions from the setup command)
+### 2. Ensure WireGuard is Installed
 
-4. Restart your terminal or source your shell configuration file:
-   ```bash
-   # For bash
-   source ~/.bashrc
-   # For zsh
-   source ~/.zshrc
-   ```
+WireGuard is required for all VPN and tunnel operations.  
+Check if it's installed:
 
-### Installation
+```bash
+wg --version
+```
+
+If you see a version number, you're good! If not, install it using the instructions above.
+
+### 3. (Optional) Install pnpm
+
+If you want to develop or run from source, install pnpm:
+
+```bash
+npm install -g pnpm
+```
+
+## Usage
+
+### Server Setup
+
+Start the server using the CLI:
+
+```bash
+woof server start
+```
+
+The CLI will prompt for configuration and start the API server.
+
+### Client Usage
+
+Create a tunnel to expose a local port:
+
+```bash
+woof up 3000
+```
+
+Use a custom subdomain:
+
+```bash
+woof up 3000 --subdomain myapp
+```
+
+## Development
 
 1. Clone the repository:
    ```bash
@@ -94,52 +129,9 @@ Before installing dependencies, make sure pnpm is properly set up:
    pnpm build
    ```
 
-### Server Setup
-
-1. Start the server using the CLI:
+4. Run the CLI from source:
    ```bash
-   pnpm start -- server start
-   ```
-   Or, if globally linked:
-   ```bash
-   woof server start
-   ```
-
-   The CLI will prompt for configuration and start the API server.
-
-### Client Usage
-
-1. Build and link the CLI:
-   ```bash
-   pnpm build
-
-   # Option 1: Run directly from the repo
    pnpm start -- up 3000
-
-   # Option 2: Create a symlink to use globally (if pnpm global bin is set up)
-   pnpm link --global
-   ```
-
-2. Create a tunnel to expose a local port:
-   ```bash
-   woof up 3000
-   ```
-
-3. Use a custom subdomain:
-   ```bash
-   woof up 3000 --subdomain myapp
-   ```
-
-## Development
-
-1. Start the development server:
-   ```bash
-   pnpm dev
-   ```
-
-2. Run tests:
-   ```bash
-   pnpm test
    ```
 
 ## License
