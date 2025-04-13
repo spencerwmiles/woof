@@ -1,21 +1,16 @@
-import path from "path";
-import { fileURLToPath } from "url";
+import {
+  DB_PATH,
+  DEFAULT_PORT,
+  DEFAULT_API_BIND_ADDR,
+  API_PREFIX,
+  API_VERSION,
+  API_BASE_PATH,
+} from "./static.js";
 
 // Server configuration
-import { configDb } from "../db/index.js"; // Import DB access
-
-// --- Bootstrap Configuration (Needed before DB access) ---
-export const DEFAULT_PORT = 3000;
-export const DEFAULT_API_BIND_ADDR = "0.0.0.0"; // Default bind address
-
-// Database configuration
-// Database configuration (relative path is usually fine)
-export const DB_PATH = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../data/tunnels.db"
-);
-
 // --- Operational Configuration (Read from Database) ---
+
+import { configDb } from "../db/index.js"; // Import DB access
 
 // Helper to read from DB, assumes key exists due to initialization
 function getConfigValue(key: string): string {
@@ -59,9 +54,6 @@ export function getBaseDomain(): string {
 }
 
 // API configuration (can remain static)
-export const API_PREFIX = "/api";
-export const API_VERSION = "v1";
-export const API_BASE_PATH = `${API_PREFIX}/${API_VERSION}`;
 
 // API bind address uses bootstrap default
 export const API_BIND_ADDR = DEFAULT_API_BIND_ADDR;
@@ -83,3 +75,4 @@ export function getOperationalConfig() {
 }
 
 // Removed duplicate export of API_BIND_ADDR
+export { DEFAULT_PORT, API_BASE_PATH } from "./static.js";

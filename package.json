@@ -1,6 +1,6 @@
 {
   "name": "@spencerwmiles/woof",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "A simple CLI which provides both a server and a client for exposing services to the public internet.",
   "private": false,
   "bin": {
