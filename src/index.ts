@@ -27,9 +27,8 @@ const DEFAULT_API_BASE_PATH = "/api/v1";
 
 interface Config {
   clientId?: string;
-  publicServerUrl: string; // Public IP or DNS for registration
-  tunnelServerUrl: string; // Internal WireGuard IP for API after tunnel is up
-  apiBasePath: string;
+  baseDomain: string; // The public server domain (matches server BASE_DOMAIN)
+  apiBasePath: string; // API path (usually "/api/v1")
   tunnels: Record<string, any>;
 }
 
@@ -51,8 +50,12 @@ function initConfig(): Config {
 
   // Ensure required fields exist, providing placeholders if necessary
   const finalConfig: Config = {
-    publicServerUrl: configData.publicServerUrl || "", // Placeholder
-    tunnelServerUrl: configData.tunnelServerUrl || "", // Placeholder
+    baseDomain:
+      configData.baseDomain ||
+      (configData as any).publicServerUrl
+        ?.replace(/^https?:\/\//, "")
+        .split(":")[0] ||
+      "", // Migrate from old config if present
     apiBasePath: configData.apiBasePath || DEFAULT_API_BASE_PATH, // Use default base path
     clientId: configData.clientId,
     tunnels: configData.tunnels || {},
@@ -83,46 +86,39 @@ async function ensureRegistered(config: Config): Promise<Config> {
   console.log(chalk.blue("Registering with server..."));
 
   try {
-    // Prompt for the public server URL (domain or IP, no port needed usually)
-    const { publicUrlInput } = await inquirer.prompt({
+    // Prompt for the base domain (public server domain)
+    const { baseDomainInput } = await inquirer.prompt({
       type: "input",
-      name: "publicUrlInput",
-      message: "Enter public server domain or IP (e.g., ghost.style):",
-      // Use existing publicServerUrl if available, otherwise prompt without default
-      default: config.publicServerUrl
-        ?.replace(/^https?:\/\//, "")
-        .split(":")[0],
+      name: "baseDomainInput",
+      message:
+        "Enter the base domain for your tunnel service (e.g., ghost.style):",
+      default: config.baseDomain,
     });
 
-    // Construct the public URL (assume https unless http:// is specified)
-    const publicUrl = publicUrlInput.startsWith("http://")
-      ? publicUrlInput
-      : `https://${publicUrlInput}`;
-    config.publicServerUrl = publicUrl;
+    // Store only the domain (strip protocol and port)
+    config.baseDomain = baseDomainInput
+      .trim()
+      .replace(/^https?:\/\//, "")
+      .replace(/:\d+$/, "")
+      .split("/")[0];
 
-    // Derive the default tunnel server URL (assume same host, default API port 3000)
-    const publicHost = new URL(publicUrl).hostname;
-    const defaultTunnelUrl = `http://${publicHost}:3000`;
+    // For API calls, use the protocol and host as entered
+    let apiUrl;
+    // Always use http://{domain}:3000 for API calls
+    apiUrl = `http://${config.baseDomain}:3000${config.apiBasePath}`;
 
-    // Prompt for the tunnel server URL, defaulting to the derived one
-    const { tunnelUrlInput } = await inquirer.prompt({
-      type: "input",
-      name: "tunnelUrlInput",
-      message: "Enter internal tunnel API URL (for API calls):",
-      default: config.tunnelServerUrl || defaultTunnelUrl, // Use existing or derived default
+    // For public URLs, always use https and strip protocol/port
+    let publicUrlHost;
+    // Always use https://{domain} for public tunnel URLs
+    const publicUrl = `https://${config.baseDomain}`;
+
+    console.log(chalk.dim(`Using Public URL: ${publicUrl}`));
+    console.log(chalk.dim(`Using Tunnel API URL: ${apiUrl}`));
+
+    // Register using the API URL (honor protocol)
+    const response = await axios.post(`${apiUrl}/register`, {
+      name: os.hostname(),
     });
-    config.tunnelServerUrl = tunnelUrlInput;
-
-    console.log(chalk.dim(`Using Public URL: ${config.publicServerUrl}`));
-    console.log(chalk.dim(`Using Tunnel API URL: ${config.tunnelServerUrl}`));
-
-    // Register using the public URL
-    const response = await axios.post(
-      `${config.publicServerUrl}${config.apiBasePath}/register`,
-      {
-        name: os.hostname(),
-      }
-    );
 
     const { client, config: wgConfig } = response.data;
 
@@ -208,7 +204,8 @@ async function createTunnel(
   try {
     // Use tunnelServerUrl for API calls after tunnel is up
     const response = await axios.post(
-      `${config.tunnelServerUrl}${config.apiBasePath}/tunnels`,
+      // Use protocol and host as entered for API calls
+      `http://${config.baseDomain}:3000${config.apiBasePath}/tunnels`,
       {
         clientId: config.clientId,
         localPort,
@@ -222,9 +219,12 @@ async function createTunnel(
     config.tunnels[tunnel.id] = tunnel;
     saveConfig(config);
 
-    // In development mode, the tunnel URL is just the WireGuard IP and port
+    // For public tunnel URLs, always use https://subdomain.baseDomain
     const tunnelUrl =
-      tunnel.publicUrl || `http://${tunnel.assignedIp}:${tunnel.localPort}`;
+      tunnel.publicUrl ||
+      (tunnel.publicSubdomain
+        ? `https://${tunnel.publicSubdomain}.${config.baseDomain}`
+        : `http://${tunnel.assignedIp}:${tunnel.localPort}`);
 
     return { ...tunnel, publicUrl: tunnelUrl };
   } catch (error) {
@@ -237,7 +237,8 @@ async function createTunnel(
 async function deleteTunnel(config: Config, tunnelId: string) {
   try {
     await axios.delete(
-      `${config.tunnelServerUrl}${config.apiBasePath}/tunnels/${tunnelId}`
+      // Use protocol and host as entered for API calls
+      `http://${config.baseDomain}:3000${config.apiBasePath}/tunnels/${tunnelId}`
     );
 
     // Remove tunnel from config
@@ -262,7 +263,6 @@ program
   .description("Create a tunnel to expose a local port")
   .argument("<port>", "Local port to expose", parseInt)
   .option("-s, --subdomain <subdomain>", "Custom subdomain (optional)")
-  .option("--server <url>", "Server URL")
   .action(async (port, options) => {
     console.log(chalk.blue("Creating tunnel..."));
     console.log(`Exposing local port: ${port}`);
@@ -274,18 +274,11 @@ program
     // Initialize config
     let config = initConfig();
 
-    // Update server URL if provided
-    if (options.server) {
-      config.publicServerUrl = options.server;
-      saveConfig(config);
-    }
-
     // Register with server if not already registered
     config = await ensureRegistered(config);
 
     // Start WireGuard interface
     await startWireGuard();
-    // No need to overwrite config here; tunnelServerUrl is already set
 
     // Create tunnel
     const tunnel = await createTunnel(config, port, options.subdomain);
@@ -293,6 +286,68 @@ program
     console.log(chalk.green("Tunnel created successfully!"));
     console.log(`Public URL: ${tunnel.publicUrl}`);
     console.log(chalk.yellow("Press Ctrl+C to close the tunnel"));
+
+    // Wait a moment for the user to see the initial success message
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    // Clear console and start showing status
+    console.clear();
+
+    // Function to get WireGuard status
+    async function getWireGuardStatus() {
+      try {
+        const platform = os.platform();
+        if (platform === "darwin" || platform === "linux") {
+          // Get WireGuard status
+          const { stdout } = await execAsync("sudo wg show");
+
+          // Parse the output to find the server peer
+          const lines = stdout.split("\n");
+          let handshakeTime = "No recent handshake";
+          let transferRx = "0 B";
+          let transferTx = "0 B";
+
+          for (const line of lines) {
+            if (line.includes("latest handshake:")) {
+              handshakeTime = line.split("latest handshake:")[1].trim();
+            } else if (line.includes("transfer:")) {
+              const transferParts = line
+                .split("transfer:")[1]
+                .trim()
+                .split("received,");
+              transferRx = transferParts[0].trim();
+              transferTx = transferParts[1].trim();
+            }
+          }
+
+          return {
+            handshakeTime,
+            transferRx,
+            transferTx,
+            connected: handshakeTime !== "No recent handshake",
+          };
+        }
+        return {
+          handshakeTime: "Unknown",
+          transferRx: "Unknown",
+          transferTx: "Unknown",
+          connected: false,
+        };
+      } catch (err) {
+        return {
+          handshakeTime: "Error",
+          transferRx: "Error",
+          transferTx: "Error",
+          connected: false,
+        };
+      }
+    }
+
+    // Format bytes to human-readable format
+    function formatBytes(bytes: string) {
+      if (bytes === "Error" || bytes === "Unknown") return bytes;
+      return bytes;
+    }
 
     // Keep the process running until Ctrl+C
     let shuttingDown = false;
@@ -312,10 +367,68 @@ program
       process.exit(0);
     });
 
+    // Load ASCII art
+    let asciiArt = "";
+    try {
+      asciiArt = fs.readFileSync(
+        new URL("./ascii.txt", import.meta.url),
+        "utf-8"
+      );
+    } catch (err) {
+      // If ASCII art file is not found, use a simple header
+      asciiArt = "\n=== WOOF TUNNEL ===\n";
+    }
+
     // This ensures the process stays alive until Ctrl+C is pressed
     return new Promise(() => {
-      setInterval(() => {
-        // Optional heartbeat to keep connection alive
+      // Display ASCII art and initial status header
+      console.log(chalk.blue(asciiArt));
+      console.log("");
+      console.log(chalk.bold(`Public URL: ${tunnel.publicUrl}`));
+      console.log(chalk.bold(`Local Port: ${port}`));
+      console.log("");
+      console.log(chalk.yellow("Press Ctrl+C to close the tunnel"));
+      console.log("");
+
+      let lastStatus = { connected: false };
+
+      // Update status every 10 seconds
+      setInterval(async () => {
+        try {
+          // Get current status
+          const status = await getWireGuardStatus();
+
+          // Only clear and redraw if status changed
+          if (JSON.stringify(status) !== JSON.stringify(lastStatus)) {
+            console.clear();
+            console.log(chalk.blue(asciiArt));
+            console.log("");
+            console.log(chalk.bold(`Public URL: ${tunnel.publicUrl}`));
+            console.log(chalk.bold(`Local Port: ${port}`));
+            console.log("");
+            console.log(
+              chalk.bold("Connection Status:"),
+              status.connected
+                ? chalk.green("Connected")
+                : chalk.yellow("Waiting for connection...")
+            );
+            console.log(chalk.bold("Last Handshake:"), status.handshakeTime);
+            console.log(
+              chalk.bold("Data Received:"),
+              formatBytes(status.transferRx)
+            );
+            console.log(
+              chalk.bold("Data Sent:"),
+              formatBytes(status.transferTx)
+            );
+            console.log("");
+            console.log(chalk.yellow("Press Ctrl+C to close the tunnel"));
+
+            lastStatus = status;
+          }
+        } catch (err) {
+          // Silently handle errors to avoid crashing the status display
+        }
       }, 10000);
     });
   });
@@ -349,39 +462,29 @@ program
 
 program
   .command("config")
-  .description("Manage configuration (public and tunnel server URLs)")
+  .description("Manage configuration (base domain and API base path)")
   .option(
-    "--public-server <url>",
-    "Set the public server URL (for registration)"
+    "--base-domain <domain>",
+    "Set the base domain (for public URLs and API)"
   )
-  .option(
-    "--tunnel-server <url>",
-    "Set the internal tunnel server URL (for API calls)"
-  )
-  .option("--server <url>", "Alias for --public-server") // Backward compatibility
+  .option("--api-base-path <path>", "Set the API base path (default: /api/v1)")
   .action(async (options) => {
     // Initialize config
     let config = initConfig();
     let updated = false;
 
-    // Handle alias
-    if (options.server && !options.publicServer) {
-      options.publicServer = options.server;
-    }
-
-    if (options.publicServer) {
-      config.publicServerUrl = options.publicServer;
-      console.log(
-        chalk.green(`Public Server URL set to: ${options.publicServer}`)
-      );
+    if (options.baseDomain) {
+      config.baseDomain = options.baseDomain
+        .replace(/^https?:\/\//, "")
+        .replace(/:\d+$/, "")
+        .split("/")[0];
+      console.log(chalk.green(`Base Domain set to: ${config.baseDomain}`));
       updated = true;
     }
 
-    if (options.tunnelServer) {
-      config.tunnelServerUrl = options.tunnelServer;
-      console.log(
-        chalk.green(`Tunnel Server URL set to: ${options.tunnelServer}`)
-      );
+    if (options.apiBasePath) {
+      config.apiBasePath = options.apiBasePath;
+      console.log(chalk.green(`API Base Path set to: ${config.apiBasePath}`));
       updated = true;
     }
 
@@ -390,16 +493,125 @@ program
     } else {
       // Display current config
       console.log(chalk.blue("Current configuration:"));
-      console.log(`Public Server URL: ${config.publicServerUrl}`);
-      console.log(`Tunnel Server URL: ${config.tunnelServerUrl}`);
+      console.log(`Base Domain: ${config.baseDomain}`);
+      console.log(`API Base Path: ${config.apiBasePath}`);
       console.log(`Client ID: ${config.clientId || "Not registered"}`);
       console.log(`Active tunnels: ${Object.keys(config.tunnels).length}`);
     }
   });
 
 program
+  .command("reset")
+  .description(
+    "Clear all client state and configuration (brings down WireGuard interface and wipes ~/.woof)"
+  )
+  .action(async () => {
+    console.log(chalk.blue("[woof] Resetting client state..."));
+
+    // 1. Load config and check for active tunnels
+    let config: Config;
+    try {
+      config = initConfig();
+    } catch (err) {
+      console.log(
+        chalk.yellow(
+          "[woof] Could not load config, proceeding with reset anyway."
+        )
+      );
+      config = {
+        baseDomain: "",
+        apiBasePath: DEFAULT_API_BASE_PATH,
+        tunnels: {},
+      };
+    }
+
+    // 2. Delete all active tunnels if client is registered
+    if (config.clientId) {
+      console.log(chalk.blue("[woof] Closing all active tunnels..."));
+      const tunnelIds = Object.keys(config.tunnels);
+
+      if (tunnelIds.length > 0) {
+        for (const tunnelId of tunnelIds) {
+          try {
+            await deleteTunnel(config, tunnelId);
+            console.log(chalk.green(`[woof] Closed tunnel: ${tunnelId}`));
+          } catch (err) {
+            console.log(
+              chalk.yellow(
+                `[woof] Failed to close tunnel ${tunnelId}, continuing with reset.`
+              )
+            );
+          }
+        }
+      } else {
+        console.log(chalk.blue("[woof] No active tunnels found."));
+      }
+    }
+
+    // 3. Attempt to bring down the WireGuard interface if config exists
+    if (fs.existsSync(WG_CONFIG_FILE)) {
+      try {
+        const platform = os.platform();
+        if (platform === "darwin" || platform === "linux") {
+          // Try to get interface status first
+          try {
+            const { stdout } = await execAsync("sudo wg show");
+            if (stdout.trim()) {
+              console.log(
+                chalk.blue(
+                  "[woof] Active WireGuard interfaces found, bringing down..."
+                )
+              );
+            }
+          } catch (err) {
+            // Ignore errors from wg show
+          }
+
+          await execAsync(`sudo wg-quick down ${WG_CONFIG_FILE}`);
+          console.log(chalk.green("[woof] WireGuard interface brought down"));
+        }
+        // No Windows support yet
+      } catch (err) {
+        console.log(
+          chalk.yellow(
+            "[woof] WireGuard interface may not have been up or could not be brought down."
+          )
+        );
+      }
+    }
+
+    // 4. Remove the config directory
+    if (fs.existsSync(CONFIG_DIR)) {
+      fs.rmSync(CONFIG_DIR, { recursive: true, force: true });
+      console.log(
+        chalk.green(`[woof] Cleared all client state at: ${CONFIG_DIR}`)
+      );
+    } else {
+      console.log(
+        chalk.yellow(`[woof] No client state found at: ${CONFIG_DIR}`)
+      );
+    }
+
+    console.log(chalk.green("[woof] Client reset complete."));
+  });
+
+const server = program
   .command("server")
-  .description("Server management commands")
+  .description("Server management commands");
+
+server
+  .command("reset")
+  .alias("clear")
+  .description(
+    "Clear all server state and configuration (wipes ~/.woof/server, removes nginx configs, reloads nginx)"
+  )
+  .action(async () => {
+    const { resetServerState } = await import("./server/index.js");
+    await resetServerState();
+    process.exit(0);
+  });
+
+server
   .command("start")
   .description("Start the Woof server")
   .option("-p, --port <port>", "Port to run the API server on")

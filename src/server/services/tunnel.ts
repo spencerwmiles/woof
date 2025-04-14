@@ -41,11 +41,11 @@ function generateRandomSubdomain(length = 8): string {
  * Get the public URL for a tunnel
  */
 export function getTunnelUrl(tunnel: Tunnel): string {
-  const domain = (configDb.get.get("domain") as any)?.value;
-  if (!domain) {
-    throw new Error("Domain not configured");
+  const baseDomain = (configDb.get.get("BASE_DOMAIN") as any)?.value;
+  if (!baseDomain) {
+    throw new Error("BASE_DOMAIN not configured");
   }
-  return `https://${tunnel.publicSubdomain}.${domain}`;
+  return `https://${tunnel.publicSubdomain}.${baseDomain}`;
 }
 
 /**

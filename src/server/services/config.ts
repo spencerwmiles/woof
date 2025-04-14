@@ -2,7 +2,7 @@ import { configDb } from "../db/index.js";
 import inquirer from "inquirer";
 
 export interface ServerConfig {
-  domain: string;
+  baseDomain: string;
   serverPublicKey?: string;
   serverPrivateKey?: string;
 }
@@ -12,25 +12,25 @@ export interface ServerConfig {
  */
 export async function getServerConfig(): Promise<ServerConfig> {
   // Get existing config
-  const domain = (configDb.get.get("domain") as any)?.value;
+  const baseDomain = (configDb.get.get("BASE_DOMAIN") as any)?.value;
   const serverPublicKey = (configDb.get.get("server_public_key") as any)?.value;
   const serverPrivateKey = (configDb.get.get("server_private_key") as any)
     ?.value;
 
   let config: ServerConfig = {
-    domain: domain || "",
+    baseDomain: baseDomain || "",
     serverPublicKey,
     serverPrivateKey,
   };
 
-  // If domain is not set, prompt for it
-  if (!config.domain) {
+  // If baseDomain is not set, prompt for it
+  if (!config.baseDomain) {
     const answers = await inquirer.prompt([
       {
         type: "input",
-        name: "domain",
+        name: "baseDomain",
         message:
-          "Enter the domain for your tunnel service (e.g., tunnel.yourdomain.com):",
+          "Enter the base domain for your tunnel service (e.g., tunnel.yourdomain.com):",
         validate: (input) => {
           if (!input) return "Domain is required";
           if (input === "localhost") return "Please enter a real domain";
@@ -39,8 +39,8 @@ export async function getServerConfig(): Promise<ServerConfig> {
       },
     ]);
 
-    config.domain = answers.domain;
-    configDb.set.run("domain", config.domain);
+    config.baseDomain = answers.baseDomain;
+    configDb.set.run("BASE_DOMAIN", config.baseDomain);
   }
 
   return config;
@@ -50,8 +50,8 @@ export async function getServerConfig(): Promise<ServerConfig> {
  * Update server configuration
  */
 export function updateServerConfig(config: Partial<ServerConfig>): void {
-  if (config.domain) {
-    configDb.set.run("domain", config.domain);
+  if (config.baseDomain) {
+    configDb.set.run("BASE_DOMAIN", config.baseDomain);
   }
   if (config.serverPublicKey) {
     configDb.set.run("server_public_key", config.serverPublicKey);

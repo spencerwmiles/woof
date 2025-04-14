@@ -5,11 +5,9 @@ import { fileURLToPath } from "url";
 export const DEFAULT_PORT = 3000;
 export const DEFAULT_API_BIND_ADDR = "0.0.0.0"; // Default bind address
 
-// Database configuration (relative path is usually fine)
-export const DB_PATH = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../data/tunnels.db"
-);
+import os from "os";
+// Database configuration: store in ~/.woof/server/tunnels.db for consistency
+export const DB_PATH = path.join(os.homedir(), ".woof", "server", "tunnels.db");
 
 // API configuration (can remain static)
 export const API_PREFIX = "/api";

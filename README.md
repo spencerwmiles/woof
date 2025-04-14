@@ -1,5 +1,38 @@
 # Woof
 
+```
+                                                                           
+                                                                           
+                                                                           
+                     ████                                                  
+                 ███████████                                               
+              █████   ███████  ██████████       ██████                     
+           ██████   ███████ ███████████████████████████████                
+           ██    █ ███████                 ███ ██         ██               
+            ██    ██████                 ██   █████  ██  ███               
+            ███  ██████             ██      █   ███  █   ██                
+            ███████ ██              █  █        ███     ███                
+             ██████ █          █    █        ██ ████   ███                 
+                  ███                        █   █████████                 
+                   ██  █████            ████       ██████                  
+                   ███████ ██          ███ ██        ███                   
+                   ██  █████           ██████         ██                   
+                    ██   █             █████          ██                   
+                     ██                              ████                  
+                      █      ████                    ██████                
+                      ███  ███ ████                 ██  ██████             
+                       ██  ████████               ███   ██████████         
+                       ██   ██████               ██   ██████████████       
+                       ██    ███         █    ███    ████████  █████       
+                        ███████ ████   █     ██   ██████   █   █████       
+                           █████████      ██    ██████     █████████       
+                           ███              ████████    ███████████        
+                           ██               █████     ████████████         
+                                                                           
+                                                                           
+                                                                                                                        
+```
+
 A simple CLI which provides both a server and a client for exposing services to the public internet.
 
 ## Features
@@ -117,6 +150,36 @@ Use a custom subdomain:
 ```bash
 woof up 3000 --subdomain myapp
 ```
+---
+
+## Data Storage & Resetting State
+
+### Where is state stored?
+
+- **Client:** All client configuration, WireGuard config, and tunnel state are stored in `~/.woof` in your home directory.
+- **Server:** All server configuration, database, and WireGuard config are stored in `~/.woof/server` in the server's home directory. The server manages its own WireGuard config in `~/.woof/server/wireguard` (not `/etc/wireguard`).
+
+### Resetting/Clearing State
+
+- **Client:**
+  To fully clear all client state and bring down any running WireGuard interface, run:
+  ```bash
+  woof reset
+  ```
+  This will bring down the WireGuard interface (if running) and delete all files in `~/.woof`.
+
+- **Server:**
+  To fully clear all server state, remove all server config, database, and WireGuard config, and clean up any Nginx configs created by Woof, run:
+  ```bash
+  woof server reset
+  ```
+  or
+  ```bash
+  woof server clear
+  ```
+  This will delete `~/.woof/server`, remove any Nginx configs created by Woof from `/etc/nginx/sites-enabled`, and reload Nginx.
+
+---
 
 ## Development
 

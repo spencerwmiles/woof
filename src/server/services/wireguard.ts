@@ -33,7 +33,7 @@ export interface PeerStatus {
 }
 
 // Server configuration paths
-const WG_CONFIG_DIR = "/etc/wireguard";
+const WG_CONFIG_DIR = path.join(os.homedir(), ".woof", "server", "wireguard");
 const WG_CONFIG_FILE = path.join(WG_CONFIG_DIR, `${getWgInterface()}.conf`);
 
 interface ConfigValue {
@@ -97,11 +97,11 @@ PostDown = sysctl -w net.ipv4.ip_forward=0; iptables -D FORWARD -i %i -d 127.0.0
 
     // Bring up the interface
     try {
-      await execAsync(`sudo wg-quick down ${getWgInterface()}`);
+      await execAsync(`sudo wg-quick down ${WG_CONFIG_FILE}`);
     } catch (error) {
       // Ignore errors when bringing down non-existent interface
     }
-    await execAsync(`sudo wg-quick up ${getWgInterface()}`);
+    await execAsync(`sudo wg-quick up ${WG_CONFIG_FILE}`);
 
     console.log(
       `WireGuard interface ${getWgInterface()} initialized successfully`
@@ -181,12 +181,16 @@ export function getNextAvailableIp(): string {
  */
 export async function addPeer(peer: WireGuardPeer): Promise<void> {
   try {
+    console.log(
+      `[DEBUG] addPeer called for peer: ${peer.id}, publicKey: ${peer.publicKey}, assignedIp: ${peer.assignedIp}`
+    );
     // Add the peer to WireGuard
     await execAsync(
       `sudo wg set ${getWgInterface()} peer ${peer.publicKey} allowed-ips ${
         peer.assignedIp
       }/32`
     );
+    console.log(`[DEBUG] wg set command succeeded for peer: ${peer.id}`);
 
     // Save the peer to the database
     clientsDb.create.run(
@@ -197,10 +201,14 @@ export async function addPeer(peer: WireGuardPeer): Promise<void> {
       peer.assignedIp,
       Date.now()
     );
+    console.log(`[DEBUG] Peer saved to database: ${peer.id}`);
 
     console.log(`Added WireGuard peer: ${peer.id} (${peer.assignedIp})`);
   } catch (error) {
-    console.error("Error adding WireGuard peer:", error);
+    console.error(
+      `[ERROR] Error adding WireGuard peer (publicKey: ${peer.publicKey}, assignedIp: ${peer.assignedIp}):`,
+      error
+    );
     throw new Error("Failed to add WireGuard peer");
   }
 }
@@ -239,6 +247,7 @@ export async function getPeerStatus(): Promise<PeerStatus[]> {
   try {
     // Get the status of all peers
     const { stdout } = await execAsync(`sudo wg show ${getWgInterface()} dump`);
+    console.log("[DEBUG] Raw wg show dump output:\n", stdout);
 
     // Parse the output
     const lines = stdout.trim().split("\n");
@@ -247,7 +256,7 @@ export async function getPeerStatus(): Promise<PeerStatus[]> {
     const peerLines = lines.slice(1);
 
     // Parse each peer line
-    return peerLines.map((line) => {
+    const peerStatusArr = peerLines.map((line) => {
       const parts = line.split("\t");
 
       return {
@@ -258,6 +267,12 @@ export async function getPeerStatus(): Promise<PeerStatus[]> {
         endpoint: parts[3] !== "(none)" ? parts[3] : undefined,
       };
     });
+
+    console.log(
+      "[DEBUG] Parsed peer status array:",
+      JSON.stringify(peerStatusArr, null, 2)
+    );
+    return peerStatusArr;
   } catch (error) {
     console.error("Error getting WireGuard peer status:", error);
     throw new Error("Failed to get WireGuard peer status");
@@ -282,7 +297,7 @@ DNS = 1.1.1.1, 8.8.8.8
 PublicKey = ${serverPublicKey}
 Endpoint = ${serverEndpoint}
 # Allow traffic to/from localhost and WireGuard peers
-AllowedIPs = 127.0.0.1/32, 10.8.0.0/24
+AllowedIPs = 10.8.0.0/24
 PersistentKeepalive = 25
 `;
 

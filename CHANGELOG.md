@@ -1,5 +1,15 @@
 # @spencerwmiles/woof
 
+## 0.0.9
+
+### Patch Changes
+
+- Fixed URL configuration
+- Reverted some changes which broke functionality (api only accesible via tunnel)
+- Added reset for both client and server to make cleanup easier
+- Lots of small improvements to command workflow to make overall configuration as easy as possible
+- Added ascii art (still needs work for rendering in CLI)
+
 ## 0.0.8
 
 ### Patch Changes
