@@ -150,6 +150,70 @@ Use a custom subdomain:
 ```bash
 woof up 3000 --subdomain myapp
 ```
+
+## API Security
+
+The Woof API is secured using API key authentication.
+
+### Authentication
+
+All API requests must include a valid API key in the `X-API-Key` header. Requests without a valid API key will be rejected with a 401 Unauthorized response.
+
+Example:
+```bash
+curl -X GET http://localhost:3000/api/v1/clients \
+  -H "X-API-Key: your-api-key-here"
+```
+
+### API Key Management
+
+#### Initial Setup
+
+When the server is first started, an initial API key is automatically generated and displayed in the console. **This key will only be shown once**, so make sure to save it securely.
+
+Example console output:
+```
+=================================================
+IMPORTANT: API Key Generated
+=================================================
+API Key: 3a7c4be1f8d9e2b5a0c6...
+This key will not be shown again. Store it securely.
+=================================================
+```
+
+#### Managing API Keys via CLI
+
+Woof provides CLI commands to manage API keys:
+
+**Create a New API Key** (replaces any existing API key):
+
+```bash
+woof api-key create
+```
+
+You can optionally provide a name for the key:
+
+```bash
+woof api-key create --name "My Custom Key"
+```
+
+**Revoke All API Keys**:
+
+```bash
+woof api-key revoke
+```
+
+Note: After revoking all keys, API access will be unavailable until a new key is created.
+
+#### Security Model
+
+Woof uses a simple security model:
+
+- Only one API key can be active at a time
+- Creating a new key automatically revokes all previous keys
+- All API endpoints require authentication
+- There are no permission levels - if you have the key, you have full access
+
 ---
 
 ## Data Storage & Resetting State

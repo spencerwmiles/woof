@@ -13,6 +13,7 @@ import { promisify } from "util";
 import os from "os";
 import inquirer from "inquirer";
 import { startServer } from "./server/index.js";
+import { createApiKey, revokeAllApiKeys } from "./server/api/keys.js";
 
 const execAsync = promisify(exec);
 
@@ -640,5 +641,44 @@ server
       process.exit(1);
     }
   });
+
+// Add API key management commands
+program
+  .command("api-key")
+  .description("API key management")
+  .addCommand(
+    new Command("create")
+      .description("Create a new API key (replaces any existing keys)")
+      .option("-n, --name <name>", "Name for the API key", "CLI Generated Key")
+      .action(async (options) => {
+        try {
+          const apiKey = await createApiKey(options.name);
+
+          console.log(chalk.green("API key created successfully!"));
+          console.log("\n=================================================");
+          console.log("IMPORTANT: New API Key");
+          console.log("=================================================");
+          console.log("API Key: " + apiKey);
+          console.log("This key will not be shown again. Store it securely.");
+          console.log("=================================================\n");
+        } catch (error) {
+          console.error(chalk.red("Failed to create API key:"), error);
+          process.exit(1);
+        }
+      })
+  )
+  .addCommand(
+    new Command("revoke")
+      .description("Revoke all API keys")
+      .action(async () => {
+        try {
+          await revokeAllApiKeys();
+          console.log(chalk.green("All API keys have been revoked."));
+        } catch (error) {
+          console.error(chalk.red("Failed to revoke API keys:"), error);
+          process.exit(1);
+        }
+      })
+  );
 
 program.parse();

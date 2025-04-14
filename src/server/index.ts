@@ -144,6 +144,7 @@ import promptSync from "prompt-sync";
 
 // Import API routes
 import apiRoutes from "./api/index.js";
+import { ensureApiKeyExists } from "./api/keys.js";
 
 /**
  * Starts the Dev Tunnel server.
@@ -231,6 +232,10 @@ export async function startServer() {
       }
     }
     console.log("--- End Configuration Review ---\n");
+
+    // Ensure API key exists
+    await ensureApiKeyExists();
+
     // Initialize WireGuard
     await wireguardService.initializeServer();
 

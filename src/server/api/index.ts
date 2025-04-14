@@ -2,6 +2,7 @@ import express from "express";
 import clientRoutes from "./clients.js";
 import tunnelRoutes from "./tunnels.js";
 import fs from "fs";
+import { verifyApiKey } from "../middleware/auth.js";
 const packageJson = JSON.parse(
   fs.readFileSync(new URL("../../../package.json", import.meta.url), "utf-8")
 );
@@ -17,6 +18,9 @@ router.get("/", (req, res) => {
     endpoints: ["/clients", "/tunnels"],
   });
 });
+
+// All routes require API key authentication
+router.use(verifyApiKey);
 
 // Mount routes
 router.use("/clients", clientRoutes);

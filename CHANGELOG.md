@@ -1,5 +1,11 @@
 # @spencerwmiles/woof
 
+## 0.0.10
+
+### Patch Changes
+
+- API Key authentication
+
 ## 0.0.9
 
 ### Patch Changes

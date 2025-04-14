@@ -58,6 +58,17 @@ function initializeDatabase() {
     )
   `);
 
+  // API Keys table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      key_hash TEXT UNIQUE NOT NULL,
+      created_at INTEGER NOT NULL,
+      last_used INTEGER
+    )
+  `);
+
   // Ensure essential config values exist in the database
   const getConfig = db.prepare("SELECT value FROM config WHERE key = ?");
   const setConfig = db.prepare(
@@ -175,4 +186,36 @@ export const configDb: Record<string, Statement> = {
     INSERT INTO config (key, value) VALUES (?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `),
+};
+
+// API Keys-related functions
+export const apiKeysDb: Record<string, Statement> = {
+  // Create a new API key
+  create: db.prepare(`
+    INSERT INTO api_keys (id, name, key_hash, created_at)
+    VALUES (?, ?, ?, ?)
+  `),
+
+  // Get an API key by ID
+  getById: db.prepare("SELECT * FROM api_keys WHERE id = ?"),
+
+  // Get an API key by hash
+  getByHash: db.prepare("SELECT * FROM api_keys WHERE key_hash = ?"),
+
+  // Update an API key's last used timestamp
+  updateLastUsed: db.prepare("UPDATE api_keys SET last_used = ? WHERE id = ?"),
+
+  // List all API keys
+  listAll: db.prepare(
+    "SELECT id, name, created_at, last_used FROM api_keys ORDER BY created_at DESC"
+  ),
+
+  // Delete all API keys
+  deleteAll: db.prepare("DELETE FROM api_keys"),
+
+  // Delete an API key
+  delete: db.prepare("DELETE FROM api_keys WHERE id = ?"),
+
+  // Count API keys
+  count: db.prepare("SELECT COUNT(*) as count FROM api_keys"),
 };
