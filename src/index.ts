@@ -14,6 +14,7 @@ import os from "os";
 import inquirer from "inquirer";
 import { startServer } from "./server/index.js";
 import { createApiKey, revokeAllApiKeys } from "./server/api/keys.js";
+import { asciiArt } from "./ascii.js";
 
 const execAsync = promisify(exec);
 
@@ -316,6 +317,8 @@ program
   .argument("<port>", "Local port to expose", parseInt)
   .option("-s, --subdomain <subdomain>", "Custom subdomain (optional)")
   .action(async (port, options) => {
+    console.clear();
+    console.log(chalk.redBright(asciiArt));
     console.log(chalk.blue("Creating tunnel..."));
     console.log(`Exposing local port: ${port}`);
 
@@ -419,22 +422,11 @@ program
       process.exit(0);
     });
 
-    // Load ASCII art
-    let asciiArt = "";
-    try {
-      asciiArt = fs.readFileSync(
-        new URL("./ascii.txt", import.meta.url),
-        "utf-8"
-      );
-    } catch (err) {
-      // If ASCII art file is not found, use a simple header
-      asciiArt = "\n=== WOOF TUNNEL ===\n";
-    }
-
     // This ensures the process stays alive until Ctrl+C is pressed
     return new Promise(() => {
       // Display ASCII art and initial status header
-      console.log(chalk.blue(asciiArt));
+      console.clear();
+      console.log(chalk.redBright(asciiArt));
       console.log("");
       console.log(chalk.bold(`Public URL: ${tunnel.publicUrl}`));
       console.log(chalk.bold(`Local Port: ${port}`));
@@ -453,7 +445,11 @@ program
           // Only clear and redraw if status changed
           if (JSON.stringify(status) !== JSON.stringify(lastStatus)) {
             console.clear();
-            console.log(chalk.blue(asciiArt));
+            if (status.connected) {
+              console.log(chalk.green(asciiArt));
+            } else {
+              console.log(chalk.blue(asciiArt));
+            }
             console.log("");
             console.log(chalk.bold(`Public URL: ${tunnel.publicUrl}`));
             console.log(chalk.bold(`Local Port: ${port}`));
