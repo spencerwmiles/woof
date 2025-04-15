@@ -205,6 +205,20 @@ woof api-key revoke
 
 Note: After revoking all keys, API access will be unavailable until a new key is created.
 
+#### Configuring API Key for Clients
+
+Before using any client commands that communicate with the server (like `woof up`), you need to configure your client with the API key:
+
+```bash
+woof config --api-key YOUR_API_KEY_HERE
+```
+
+You can verify your configuration (the key will be shown as masked):
+
+```bash
+woof config
+```
+
 #### Security Model
 
 Woof uses a simple security model:

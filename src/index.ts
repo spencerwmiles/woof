@@ -31,6 +31,7 @@ interface Config {
   baseDomain: string; // The public server domain (matches server BASE_DOMAIN)
   apiBasePath: string; // API path (usually "/api/v1")
   tunnels: Record<string, any>;
+  apiKey?: string; // API key for authentication
 }
 
 // Initialize the config directory and file if they don't exist
@@ -60,6 +61,7 @@ function initConfig(): Config {
     apiBasePath: configData.apiBasePath || DEFAULT_API_BASE_PATH, // Use default base path
     clientId: configData.clientId,
     tunnels: configData.tunnels || {},
+    apiKey: configData.apiKey || "",
   };
 
   // Write back the potentially updated config (e.g., if file was missing/corrupt)
@@ -69,13 +71,26 @@ function initConfig(): Config {
   }
 
   return finalConfig;
-
-  // Removed old try/catch as it's handled above now
 }
 
 // Save config to file
 function saveConfig(config: Config) {
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+}
+
+// Function to update API key in the client config
+function updateApiKey(apiKey: string): Config {
+  // Load current config
+  const config = initConfig();
+  // Update the API key
+  config.apiKey = apiKey;
+  // Save the updated config
+  console.log(
+    "Saving API key to config:",
+    config.apiKey ? "API key set" : "No key set"
+  );
+  saveConfig(config);
+  return config;
 }
 
 // Register with the server if not already registered
@@ -87,6 +102,15 @@ async function ensureRegistered(config: Config): Promise<Config> {
   console.log(chalk.blue("Registering with server..."));
 
   try {
+    // Check if API key is set
+    if (!config.apiKey) {
+      console.error(
+        chalk.red("API key not configured. Please set your API key first:")
+      );
+      console.error(chalk.yellow("woof config --api-key YOUR_API_KEY"));
+      process.exit(1);
+    }
+
     // Prompt for the base domain (public server domain)
     const { baseDomainInput } = await inquirer.prompt({
       type: "input",
@@ -117,9 +141,17 @@ async function ensureRegistered(config: Config): Promise<Config> {
     console.log(chalk.dim(`Using Tunnel API URL: ${apiUrl}`));
 
     // Register using the API URL (honor protocol)
-    const response = await axios.post(`${apiUrl}/register`, {
-      name: os.hostname(),
-    });
+    const response = await axios.post(
+      `${apiUrl}/register`,
+      {
+        name: os.hostname(),
+      },
+      {
+        headers: {
+          "X-API-Key": config.apiKey,
+        },
+      }
+    );
 
     const { client, config: wgConfig } = response.data;
 
@@ -203,6 +235,15 @@ async function createTunnel(
   subdomain?: string
 ) {
   try {
+    // Check if API key is set
+    if (!config.apiKey) {
+      console.error(
+        chalk.red("API key not configured. Please set your API key first:")
+      );
+      console.error(chalk.yellow("woof config --api-key YOUR_API_KEY"));
+      process.exit(1);
+    }
+
     // Use tunnelServerUrl for API calls after tunnel is up
     const response = await axios.post(
       // Use protocol and host as entered for API calls
@@ -211,6 +252,11 @@ async function createTunnel(
         clientId: config.clientId,
         localPort,
         subdomain,
+      },
+      {
+        headers: {
+          "X-API-Key": config.apiKey,
+        },
       }
     );
 
@@ -239,7 +285,12 @@ async function deleteTunnel(config: Config, tunnelId: string) {
   try {
     await axios.delete(
       // Use protocol and host as entered for API calls
-      `http://${config.baseDomain}:3000${config.apiBasePath}/tunnels/${tunnelId}`
+      `http://${config.baseDomain}:3000${config.apiBasePath}/tunnels/${tunnelId}`,
+      {
+        headers: {
+          "X-API-Key": config.apiKey,
+        },
+      }
     );
 
     // Remove tunnel from config
@@ -463,12 +514,13 @@ program
 
 program
   .command("config")
-  .description("Manage configuration (base domain and API base path)")
+  .description("Manage configuration (base domain, API base path, and API key)")
   .option(
     "--base-domain <domain>",
     "Set the base domain (for public URLs and API)"
   )
   .option("--api-base-path <path>", "Set the API base path (default: /api/v1)")
+  .option("--api-key <key>", "Set the API key for server authentication")
   .action(async (options) => {
     // Initialize config
     let config = initConfig();
@@ -489,6 +541,13 @@ program
       updated = true;
     }
 
+    if (options.apiKey) {
+      // Use the dedicated function for updating API key
+      config = updateApiKey(options.apiKey);
+      console.log(chalk.green(`API Key set successfully`));
+      updated = true;
+    }
+
     if (updated) {
       saveConfig(config);
     } else {
@@ -496,6 +555,7 @@ program
       console.log(chalk.blue("Current configuration:"));
       console.log(`Base Domain: ${config.baseDomain}`);
       console.log(`API Base Path: ${config.apiBasePath}`);
+      console.log(`API Key: ${config.apiKey ? "********" : "Not set"}`);
       console.log(`Client ID: ${config.clientId || "Not registered"}`);
       console.log(`Active tunnels: ${Object.keys(config.tunnels).length}`);
     }
@@ -680,5 +740,45 @@ program
         }
       })
   );
+
+// Add a debug command after the config command
+program
+  .command("debug")
+  .description("Debug information for troubleshooting (shows raw config)")
+  .action(() => {
+    // Show config file path
+    console.log(chalk.blue("Config file location:"));
+    console.log(CONFIG_FILE);
+
+    // Check if config file exists
+    if (!fs.existsSync(CONFIG_FILE)) {
+      console.log(chalk.red("Config file does not exist!"));
+      return;
+    }
+
+    // Show raw config file contents
+    console.log(chalk.blue("Raw config file contents:"));
+    try {
+      const rawConfig = fs.readFileSync(CONFIG_FILE, "utf-8");
+      console.log(rawConfig);
+
+      // Parse and validate config
+      try {
+        const parsedConfig = JSON.parse(rawConfig);
+        console.log(chalk.blue("Parsed config keys:"));
+        console.log(Object.keys(parsedConfig));
+
+        // Check for key presence
+        console.log(chalk.blue("Config validation:"));
+        console.log(`API Key present: ${Boolean(parsedConfig.apiKey)}`);
+        console.log(`Base Domain: ${parsedConfig.baseDomain || "Not set"}`);
+        console.log(`API Base Path: ${parsedConfig.apiBasePath || "Not set"}`);
+      } catch (err) {
+        console.log(chalk.red("Failed to parse config as JSON:"), err);
+      }
+    } catch (err) {
+      console.log(chalk.red("Failed to read config file:"), err);
+    }
+  });
 
 program.parse();
